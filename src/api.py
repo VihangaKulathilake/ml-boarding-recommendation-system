@@ -11,6 +11,7 @@ def load_model():
     print(f"✅ Model loaded from: {MODEL_PATH}")
     return model
 
+
 # 2. Create features
 def create_features(user, boarding):
     return [
