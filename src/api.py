@@ -1,5 +1,8 @@
 import os
 import joblib
+from fastapi import FastAPI # fast api framework for building APIs 
+
+app = FastAPI()
 
 # 1. Load model (clean way)
 
@@ -10,7 +13,6 @@ def load_model():
     model = joblib.load(MODEL_PATH)
     print(f"✅ Model loaded from: {MODEL_PATH}")
     return model
-
 
 # 2. Create features
 def create_features(user, boarding):
@@ -41,27 +43,38 @@ def recommend(model, user, boardings):
 
     return boardings
 
-# 4. Test (main execution)
 
-if __name__ == "__main__":
-    model = load_model()
+model = load_model()
 
-    # user preferences
-    user = {
-        "rooms": 2,
-        "distance": 2,
-        "wifi": 1
-    }
-
-    # sample boardings
-    boardings = [
-        {"id": 1, "rooms": 2, "distance": 1.5, "wifi": 1, "rating": 4.6},
-        {"id": 2, "rooms": 1, "distance": 5, "wifi": 0, "rating": 3.0},
-        {"id": 3, "rooms": 3, "distance": 1, "wifi": 1, "rating": 4.8},
-    ]
+@app.post("/recommend")
+def recommend_endpoint(data: dict):
+    user = data["user"]
+    boardings = data["boardings"]
 
     results = recommend(model, user, boardings)
+    return {"recommendations": results}
 
-    print("\n--- Recommended Boardings ---")
-    for b in results:
-        print(b)
+# # 4. Test (main execution)
+
+# if __name__ == "__main__":
+#     model = load_model()
+
+#     # user preferences
+#     user = {
+#         "rooms": 2,
+#         "distance": 2,
+#         "wifi": 1
+#     }
+
+#     # sample boardings
+#     boardings = [
+#         {"id": 1, "rooms": 2, "distance": 1.5, "wifi": 1, "rating": 4.6},
+#         {"id": 2, "rooms": 1, "distance": 5, "wifi": 0, "rating": 3.0},
+#         {"id": 3, "rooms": 3, "distance": 1, "wifi": 1, "rating": 4.8},
+#     ]
+
+#     results = recommend(model, user, boardings)
+
+#     print("\n--- Recommended Boardings ---")
+#     for b in results:
+#         print(b)
