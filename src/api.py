@@ -1,32 +1,55 @@
-import os
-import joblib
+import os # for handling file paths
+import joblib # for loading the trained model
 from fastapi import FastAPI # fast api framework for building APIs 
+from pydantic import BaseModel, ConfigDict # for data validation
+from typing import List # for type hinting
 
 app = FastAPI()
 
-# 1. Load model (clean way)
+class User(BaseModel):
+    rooms: int
+    distance: float
+    facilities: List[str]
 
+class Boarding(BaseModel):
+    model_config = ConfigDict(extra='allow')
+    id: str
+    number_of_rooms: int
+    distance_km: float
+    rating: float
+
+class RecommendationRequest(BaseModel):
+    user: User
+    boardings: List[Boarding]
+
+# Load model
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "..", "model", "boarding_model.pkl")
 
 def load_model():
     model = joblib.load(MODEL_PATH)
-    print(f"✅ Model loaded from: {MODEL_PATH}")
+    print(f"Model loaded from: {MODEL_PATH}")
     return model
 
-# 2. Create features
+def calculate_facility_score(requested, boarding):
+    match = sum(1 for f in requested if boarding.get(f, 0) == 1)
+    return match / len(requested) if requested else 0
+
+# Create features
 def create_features(user, boarding):
-    return [
-        abs(user["rooms"] - boarding["rooms"]),
-        abs(user["distance"] - boarding["distance"]),
-        1 if user["wifi"] == boarding["wifi"] else 0,
-        boarding["rating"]
-    ]
+    room_match = 1 if boarding.get("number_of_rooms", 0) >= user.get("rooms", 0) else 0
+    distance_score = max(0, 1 - (boarding.get("distance_km", 0) / max(user.get("distance", 1), 1)))
+    rating_score = boarding.get("rating", 0) / 5
+    facility_score = calculate_facility_score(user.get("facilities", []), boarding)
+    
+    return [room_match, distance_score, rating_score, facility_score]
 
-# 3. Recommend boardings
-
+# Recommend boardings
 def recommend(model, user, boardings):
     X = []
+
+    if not boardings:
+        return []
 
     for b in boardings:
         X.append(create_features(user, b))
@@ -46,35 +69,19 @@ def recommend(model, user, boardings):
 
 model = load_model()
 
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Boarding Recommendation API!"}
+
 @app.post("/recommend")
-def recommend_endpoint(data: dict):
-    user = data["user"]
-    boardings = data["boardings"]
+def recommend_endpoint(data: RecommendationRequest):
 
-    results = recommend(model, user, boardings)
-    return {"recommendations": results}
+    try:
+        user = data.user.model_dump()
+        boardings = [b.model_dump() for b in data.boardings]
 
-# # 4. Test (main execution)
+        results = recommend(model, user, boardings)
+        return {"recommendations": results}
 
-# if __name__ == "__main__":
-#     model = load_model()
-
-#     # user preferences
-#     user = {
-#         "rooms": 2,
-#         "distance": 2,
-#         "wifi": 1
-#     }
-
-#     # sample boardings
-#     boardings = [
-#         {"id": 1, "rooms": 2, "distance": 1.5, "wifi": 1, "rating": 4.6},
-#         {"id": 2, "rooms": 1, "distance": 5, "wifi": 0, "rating": 3.0},
-#         {"id": 3, "rooms": 3, "distance": 1, "wifi": 1, "rating": 4.8},
-#     ]
-
-#     results = recommend(model, user, boardings)
-
-#     print("\n--- Recommended Boardings ---")
-#     for b in results:
-#         print(b)
+    except Exception as e:
+        return {"error": str(e)}
